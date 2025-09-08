@@ -1,0 +1,140 @@
+x-spark-common: &common
+  environment: &common-env
+    AWS_REGION: ap-southeast-5
+    AWS_DEFAULT_REGION: ap-southeast-5
+services:
+  spark-master:
+    build: .
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    environment:
+      <<: *common-env
+      SPARK_MODE: master
+      SPARK_MASTER_HOST: 0.0.0.0
+      SPARK_MASTER_PORT: 7077
+      SPARK_MASTER_WEBUI_PORT: 8080
+    volumes:
+      - ./conf:/opt/spark/conf
+      - ./data:/opt/spark/data
+      - ./logs:/opt/spark/logs
+      - spark-events:/tmp/spark-events
+      - ./work:/opt/spark/work-dir
+      - ~/.aws:/home/spark/.aws:ro
+    command: ["master"]
+
+  spark-worker-1:
+    build: .
+    container_name: spark-worker-1
+    hostname: spark-worker-1
+    ports:
+      - "8081:8081"
+    environment:
+      <<: *common-env
+      SPARK_MODE: worker
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2g
+      SPARK_WORKER_WEBUI_PORT: 8081
+    volumes:
+      - ./conf:/opt/spark/conf
+      - ./data:/opt/spark/data
+      - ./logs:/opt/spark/logs
+      - spark-events:/tmp/spark-events
+      - ./work:/opt/spark/work-dir
+      - ~/.aws:/home/spark/.aws:ro
+    command: ["worker", "spark-master:7077"]
+    depends_on:
+      - spark-master
+
+  spark-worker-2:
+    build: .
+    container_name: spark-worker-2
+    hostname: spark-worker-2
+    ports:
+      - "8082:8082"
+    environment:
+      <<: *common-env
+      SPARK_MODE: worker
+      SPARK_WORKER_CORES: 2
+      SPARK_WORKER_MEMORY: 2g
+      SPARK_WORKER_WEBUI_PORT: 8082
+    volumes:
+      - ./conf:/opt/spark/conf
+      - ./data:/opt/spark/data
+      - ./logs:/opt/spark/logs
+      - spark-events:/tmp/spark-events
+      - ./work:/opt/spark/work-dir
+      - ~/.aws:/home/spark/.aws:ro
+    command: ["worker", "spark-master:7077"]
+    depends_on:
+      - spark-master
+
+  spark-history-server:
+    build: .
+    container_name: spark-history-server
+    hostname: spark-history-server
+    ports:
+      - "18080:18080"
+    depends_on:
+      - spark-master
+    environment:
+      <<: *common-env
+      SPARK_MODE: history
+      SPARK_HISTORY_OPTS: -Dspark.history.ui.port=18080 -Dspark.history.fs.logDirectory=/tmp/spark-events
+    volumes:
+      - ./conf:/opt/spark/conf
+      - ./logs:/opt/spark/logs
+      - spark-events:/tmp/spark-events
+      - ~/.aws:/home/spark/.aws:ro
+    command: ["history-server"]
+
+  # Spark Thrift Server for JDBC/ODBC connections
+  spark-thrift-server:
+    build: .
+    container_name: spark-thrift-server
+    hostname: spark-thrift-server
+    ports:
+      - "10001:10001"  # Thrift server port
+      - "4040:4040"    # Spark UI port
+    depends_on:
+      - spark-master
+    environment:
+      <<: *common-env
+      SPARK_MODE: thrift-server
+      THRIFT_OPTION: |
+        --hiveconf hive.server2.thrift.port=10001
+        --hiveconf hive.server2.thrift.bind.host=0.0.0.0
+        --conf spark.sql.adaptive.enabled=true
+        --conf spark.sql.adaptive.coalescePartitions.enabled=true
+        --conf spark.serializer=org.apache.spark.serializer.KryoSerializer
+        --conf spark.sql.catalog.glue_apse1=org.apache.iceberg.spark.SparkCatalog
+        --conf spark.sql.catalog.glue_apse1.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog
+        --conf spark.sql.catalog.glue_apse1.io-impl=org.apache.iceberg.aws.s3.S3FileIO
+        --conf spark.sql.catalog.glue_apse1.client.factory=org.apache.iceberg.aws.AssumeRoleAwsClientFactory
+        --conf spark.sql.catalog.glue_apse1.client.assume-role.arn=arn:aws:iam::889924997113:role/non-prod-uat-glue-etl-role
+        --conf spark.sql.catalog.glue_apse1.client.assume-role.region=ap-southeast-1
+        --conf spark.sql.catalog.glue_apse1.warehouse=s3a://non-prod-uat-gold-889924997113-ap-southeast-1/
+        --conf spark.sql.catalog.glue_apse1.client.assume-role.external-id=889924997113
+        --conf spark.sql.catalog.s3tablesbucket=org.apache.iceberg.spark.SparkCatalog
+        --conf spark.sql.catalog.s3tablesbucket.catalog-impl=software.amazon.s3tables.iceberg.S3TablesCatalog
+        --conf spark.sql.catalog.s3tablesbucket.client.region=ap-southeast-5
+        --conf spark.sql.catalog.s3tablesbucket.io-impl=org.apache.iceberg.aws.s3.S3FileIO
+        --conf spark.sql.catalog.s3tablesbucket.warehouse=arn:aws:s3tables:ap-southeast-5:246233008153:bucket/s3tables-bucket-apse5-dev-vikki-olap
+        --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+    volumes:
+      - ./conf:/opt/spark/conf
+      - ./data:/opt/spark/data
+      - ./logs:/opt/spark/logs
+      - spark-events:/tmp/spark-events
+      - ./work:/opt/spark/work-dir
+      - ~/.aws:/home/spark/.aws:ro
+    command: ["thrift-server", "spark-master:7077"]
+volumes:
+  spark-events:
+    driver: local
+
+networks:
+  default:
+    name: spark-network
