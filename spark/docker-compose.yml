@@ -123,6 +123,7 @@ services:
         --conf spark.sql.catalog.s3tablesbucket.io-impl=org.apache.iceberg.aws.s3.S3FileIO
         --conf spark.sql.catalog.s3tablesbucket.warehouse=arn:aws:s3tables:ap-southeast-5:246233008153:bucket/s3tables-bucket-apse5-dev-vikki-olap
         --conf spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
+        --conf spark.sql.defaultCatalog=s3tablesbucket
     volumes:
       - ./conf:/opt/spark/conf
       - ./data:/opt/spark/data

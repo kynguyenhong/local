@@ -43,7 +43,7 @@ def execute_query(query):
 # execute_query("GET spark.sql.catalog.s3tablesbucket.*")
 
 # execute_query("SHOW DATABASES in s3tablesbucket")
-execute_query("SELECT * FROM s3tablesbucket.olap_report.vk_tt11_a00251 LIMIT 10")
+execute_query("show tables in olap_aggregated like '*'")
 
 
 cursor.close()
